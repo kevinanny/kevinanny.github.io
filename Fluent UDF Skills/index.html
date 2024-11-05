@@ -48,7 +48,9 @@
     <ul class="current">
     <li class="toctree-l2"><a class="reference internal" href="#get-zone-id-by-name">Get Zone ID by Name</a>
     </li>
-    <li class="toctree-l2"><a class="reference internal" href="#get-node-value-from-face-or-cell-value">Get node value from face or cell value</a>
+    <li class="toctree-l2"><a class="reference internal" href="#get-node-value">Get Node Value</a>
+    </li>
+    <li class="toctree-l2"><a class="reference internal" href="#gradient-related-notes">Gradient Related Notes</a>
     </li>
     </ul>
                 </li>
@@ -130,7 +132,7 @@ int GetZoneIdByName(char *zoneName)
     return zoneID;
 }
 </code></pre>
-<h2 id="get-node-value-from-face-or-cell-value">Get node value from face or cell value</h2>
+<h2 id="get-node-value">Get Node Value</h2>
 <p>Ansys Fluent store value on cell centroid and face centroid, therefore no value on nodes. Here an unelegant but useful method was introduced. That is getting the value from Fluent postprocessing.</p>
 <pre><code class="language-c">#include &quot;udf.h&quot;
 #include &quot;dx.h&quot;
@@ -174,6 +176,41 @@ DEFINE_ADJUST(N_UDMI_get_value,d)
     }
     end_f_loop(f,tf)
 }
+</code></pre>
+<h2 id="gradient-related-notes">Gradient Related Notes</h2>
+<ol>
+<li>Fluent 计算过程中默认会将梯度值释放掉以降低内存占用，需要使用命令 <code>solve/set/advanced/retain-temporary-solver-mem</code> 来保存梯度值。</li>
+<li>梯度值是在迭代过程中求解的，因此在迭代开始之前，无法获得梯度值。如 DEFINE_ADJUST 宏在迭代开始之前调用了梯度，Fluent 会报错。可以使用 <code>if(NULL!=T_STORAGE_R_NV(fluid_thread, SV_T_G))</code> 来判断是否已经建立了梯度值。</li>
+</ol>
+<pre><code class="language-c">DEFINE_ADJUST(show_gradient, domain)
+{
+    face_t f;
+    real T_gradient[ND_ND];
+    int theInletID = GetZoneIdByName(&quot;inlet&quot;); //根据边界名字获取其ID,如果返回-1表示找不到
+    if (-1 == theInletID)
+    {
+        Message(&quot;Cannot find the boundary name 'inlet'. Please modify!\n&quot;);
+        return;
+    }
+
+    Thread *wall_thread = Lookup_Thread(domain, theInletID);
+    Thread *fluid_thread = THREAD_T0(wall_thread);
+
+    begin_f_loop(f, wall_thread)
+    {
+        cell_t c0 = F_C0(f, wall_thread);
+        // 如果温度梯度已经建立，一般迭代第二步以后就有梯度值了
+        if(NULL!=T_STORAGE_R_NV(fluid_thread, SV_T_G))  
+            NV_V(T_gradient, =, C_T_G(c0, fluid_thread));
+        // 如果温度梯度尚未建立，一般是迭代第一步的开始
+        else 
+            NV_D(T_gradient,=,0,0,0);
+        Message(&quot;c=%d, Temperature X gradient is %g\n&quot;, c0, T_gradient[0]);     
+    }
+    end_f_loop(f, wall_thread)
+
+————————————————
+转载自：https://blog.csdn.net/SuperUDF/article/details/128140287
 </code></pre>
               
             </div>
