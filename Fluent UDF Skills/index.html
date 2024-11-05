@@ -1,0 +1,226 @@
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" >
+<head>
+    <meta charset="utf-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+      <link rel="shortcut icon" href="../img/favicon.ico" />
+    <title>Fluent UDF - Liuwk Space</title>
+    <link rel="stylesheet" href="../css/theme.css" />
+    <link rel="stylesheet" href="../css/theme_extra.css" />
+        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.8.0/styles/github.min.css" />
+    
+      <script>
+        // Current page data
+        var mkdocs_page_name = "Fluent UDF";
+        var mkdocs_page_input_path = "Fluent UDF Skills.md";
+        var mkdocs_page_url = null;
+      </script>
+    
+    <!--[if lt IE 9]>
+      <script src="../js/html5shiv.min.js"></script>
+    <![endif]-->
+      <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.8.0/highlight.min.js"></script>
+      <script>hljs.highlightAll();</script> 
+</head>
+
+<body class="wy-body-for-nav" role="document">
+
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side stickynav">
+    <div class="wy-side-scroll">
+      <div class="wy-side-nav-search">
+          <a href=".." class="icon icon-home"> Liuwk Space
+        </a><div role="search">
+  <form id ="rtd-search-form" class="wy-form" action="../search.html" method="get">
+      <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" title="Type search term here" />
+  </form>
+</div>
+      </div>
+
+      <div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <ul>
+                <li class="toctree-l1"><a class="reference internal" href="../Debian%2012%20%E7%B3%BB%E7%BB%9F%E9%85%8D%E7%BD%AE%E6%B3%A8%E6%84%8F%E4%BA%8B%E9%A1%B9/">Debian 12 系统配置注意事项</a>
+                </li>
+              </ul>
+              <ul class="current">
+                <li class="toctree-l1 current"><a class="reference internal current" href="#">Fluent UDF</a>
+    <ul class="current">
+    <li class="toctree-l2"><a class="reference internal" href="#get-zone-id-by-name">Get Zone ID by Name</a>
+    </li>
+    <li class="toctree-l2"><a class="reference internal" href="#get-node-value-from-face-or-cell-value">Get node value from face or cell value</a>
+    </li>
+    </ul>
+                </li>
+              </ul>
+              <ul>
+                <li class="toctree-l1"><a class="reference internal" href="../%E5%9C%A8Linux%E4%B8%8A%E5%AE%89%E8%A3%85Ansys%20CFD/">在Linux上安装Ansys CFD</a>
+                </li>
+              </ul>
+              <ul>
+                <li class="toctree-l1"><a class="reference internal" href="../%E6%90%AD%E5%BB%BAMkDocs%E5%B9%B6%E9%83%A8%E7%BD%B2%E5%88%B0Github%20Pages/">搭建MkDocs并部署到Github Pages</a>
+                </li>
+              </ul>
+      </div>
+    </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap">
+      <nav class="wy-nav-top" role="navigation" aria-label="Mobile navigation menu">
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="..">Liuwk Space</a>
+        
+      </nav>
+      <div class="wy-nav-content">
+        <div class="rst-content"><div role="navigation" aria-label="breadcrumbs navigation">
+  <ul class="wy-breadcrumbs">
+    <li><a href=".." class="icon icon-home" aria-label="Docs"></a></li>
+      <li class="breadcrumb-item active">Fluent UDF</li>
+    <li class="wy-breadcrumbs-aside">
+    </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+            <div class="section" itemprop="articleBody">
+              
+                <h1 id="fluent-udf">Fluent UDF</h1>
+<p>这里介绍一些实用的 UDF 宏及其用法。</p>
+<h2 id="get-zone-id-by-name">Get Zone ID by Name</h2>
+<p>利用 thread_loop_f 和 thread_loop_c 遍历 face 和 cell 的 threads</p>
+<pre><code class="language-c">DEFINE_ADJUST(FUDM_T_interface_melt,d)
+{
+    int WALLID = GetZoneIdByName(&quot;interface-melt&quot;); //call GetZoneIDByName macro
+    face_t f;
+    Thread *tf = Lookup_Thread(d,WALLID);
+
+    begin_f_loop(f,tf)
+    {
+        ......
+    }
+    end_f_loop(f,tf)
+}
+
+int GetZoneIdByName(char *zoneName)
+{
+    int zoneID=-1;
+    Domain *domain=Get_Domain(1);
+
+    Thread *tf;
+    thread_loop_f(tf, domain) // loop all face threads
+    {
+        if(strcmp(zoneName,THREAD_NAME(tf)) == 0) //using strcmp to compare thread name
+        {
+            zoneID=THREAD_ID(tf);
+            break;
+        }
+    } 
+    if(-1==zoneID)  //if name not same
+    {
+        Thread *tc;
+        thread_loop_c(tc, domain) //loop all cell threads
+        {
+            if(strcmp(zoneName,THREAD_NAME(tf)) == 0) //compare thread name
+            {
+                zoneID=THREAD_ID(tc);
+                break;
+            }
+        }
+    }
+    return zoneID;
+}
+</code></pre>
+<h2 id="get-node-value-from-face-or-cell-value">Get node value from face or cell value</h2>
+<p>Ansys Fluent store value on cell centroid and face centroid, therefore no value on nodes. Here an unelegant but useful method was introduced. That is getting the value from Fluent postprocessing.</p>
+<pre><code class="language-c">#include &quot;udf.h&quot;
+#include &quot;dx.h&quot;
+#include &quot;mem.h&quot;
+
+#define ID 3 /* Zone ID (in boundary condition panel) on which node data is to be obtained */
+
+char *what = &quot;pressure&quot;; /* field variable name for which data is to be extracted */
+
+/* For single phase cases, the names of the field variables can be obtained from FLUENT TUI mode.
+Example: /display/contours/ =&gt; this lists all the field variables that are available. */
+
+/* For multi phase cases, the names of the field variables can be obtained from FLUENT TUI mode.
+Example: /display/contours/phase-x =&gt; this lists all the field variables (y) that are available.
+The filed variable name = &quot;phase-x-y&quot; =&gt; x = phase number ( 1, 2 etc.), y = variable name displayed in TUI. */
+
+DEFINE_ADJUST(N_UDMI_get_value,d)
+{
+    face_t f;
+    Thread *tf;
+    Node *v;
+    Node *v_shadow;
+
+    int n;
+
+    tf = Lookup_Thread(d, WALLID);
+
+    Node_Function_Values(d, what);
+
+    begin_f_loop(f,tf) 
+    {
+        f_node_loop(f,tf,n)
+        {
+
+            v=F_NODE(f,tf,n); 
+            v_shadow = F_NODE_SHADOW(f,tf,n);
+            N_UDMI(v,0) = NODE_VALUE(v);
+            N_UDMI(v_shadow,0) = N_UDMI(v,0);
+            //Message(&quot;\nx=%g, y=%g, z=%g, N_UDMI=%g&quot;,node_x, node_y, node_z, N_UDMI(v,0));
+        }
+    }
+    end_f_loop(f,tf)
+}
+</code></pre>
+              
+            </div>
+          </div><footer>
+    <div class="rst-footer-buttons" role="navigation" aria-label="Footer Navigation">
+        <a href="../Debian%2012%20%E7%B3%BB%E7%BB%9F%E9%85%8D%E7%BD%AE%E6%B3%A8%E6%84%8F%E4%BA%8B%E9%A1%B9/" class="btn btn-neutral float-left" title="Debian 12 系统配置注意事项"><span class="icon icon-circle-arrow-left"></span> Previous</a>
+        <a href="../%E5%9C%A8Linux%E4%B8%8A%E5%AE%89%E8%A3%85Ansys%20CFD/" class="btn btn-neutral float-right" title="在Linux上安装Ansys CFD">Next <span class="icon icon-circle-arrow-right"></span></a>
+    </div>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <!-- Copyright etc -->
+  </div>
+
+  Built with <a href="https://www.mkdocs.org/">MkDocs</a> using a <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a> provided by <a href="https://readthedocs.org">Read the Docs</a>.
+</footer>
+          
+        </div>
+      </div>
+
+    </section>
+
+  </div>
+
+  <div class="rst-versions" role="note" aria-label="Versions">
+  <span class="rst-current-version" data-toggle="rst-current-version">
+    
+    
+      <span><a href="../Debian%2012%20%E7%B3%BB%E7%BB%9F%E9%85%8D%E7%BD%AE%E6%B3%A8%E6%84%8F%E4%BA%8B%E9%A1%B9/" style="color: #fcfcfc">&laquo; Previous</a></span>
+    
+    
+      <span><a href="../%E5%9C%A8Linux%E4%B8%8A%E5%AE%89%E8%A3%85Ansys%20CFD/" style="color: #fcfcfc">Next &raquo;</a></span>
+    
+  </span>
+</div>
+    <script src="../js/jquery-3.6.0.min.js"></script>
+    <script>var base_url = "..";</script>
+    <script src="../js/theme_extra.js"></script>
+    <script src="../js/theme.js"></script>
+      <script src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.4/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+      <script src="../search/main.js"></script>
+    <script>
+        jQuery(function () {
+            SphinxRtdTheme.Navigation.enable(true);
+        });
+    </script>
+
+</body>
+</html>
