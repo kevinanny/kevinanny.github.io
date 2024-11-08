@@ -236,11 +236,13 @@ DEFINE_ADJUST(N_UDMI_get_value,d)
     Domain *sd1, *sd2; 
     sd1 = DOMAIN_SUB_DOMAIN(d, 0); 
     sd2 = DOMAIN_SUB_DOMAIN(d, 1); 
-    Alloc_Storage_Vars(sd1, SV_VOF_RG, SV_VOF_R, SV_NULL); 
-    Scalar_Reconstruction(sd1, SV_VOF, -1, SV_VOF_RG, NULL); 
-    Scalar_Derivatives(sd1, SV_VOF, -1, SV_VOF_G, SV_VOF_RG, Vof_Deriv_Accumulate);     Alloc_Storage_Vars(sd2, SV_VOF_RG, SV_VOF_R, SV_NULL); 
-    Scalar_Reconstruction(sd2, SV_VOF, -1, SV_VOF_RG, NULL); 
-    Scalar_Derivatives(sd2, SV_VOF, -1, SV_VOF_G, SV_VOF_RG, Vof_Deriv_Accumulate);     #endif 
+    Alloc_Storage_Vars(sd1, SV_VOF_RG, SV_VOF_R, SV_NULL);
+    Scalar_Reconstruction(sd1, SV_VOF, -1, SV_VOF_RG, NULL);
+    Scalar_Derivatives(sd1, SV_VOF, -1, SV_VOF_G, SV_VOF_RG, Vof_Deriv_Accumulate);
+    Alloc_Storage_Vars(sd2, SV_VOF_RG, SV_VOF_R, SV_NULL);
+    Scalar_Reconstruction(sd2, SV_VOF, -1, SV_VOF_RG, NULL);
+    Scalar_Derivatives(sd2, SV_VOF, -1, SV_VOF_G, SV_VOF_RG, Vof_Deriv_Accumulate);
+    #endif 
 }
 </code></pre>
 <p>Example 2:</p>
