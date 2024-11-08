@@ -50,7 +50,7 @@
     </li>
     <li class="toctree-l2"><a class="reference internal" href="#get-node-value">Get Node Value</a>
     </li>
-    <li class="toctree-l2"><a class="reference internal" href="#gradient-related-notes">Gradient Related Notes</a>
+    <li class="toctree-l2"><a class="reference internal" href="#get-gradient-value">Get Gradient Value</a>
     </li>
     </ul>
                 </li>
@@ -131,6 +131,9 @@ int GetZoneIdByName(char *zoneName)
     }
     return zoneID;
 }
+
+————————————————
+转载自：https://blog.csdn.net/SuperUDF/article/details/128140287
 </code></pre>
 <h2 id="get-node-value">Get Node Value</h2>
 <p>Ansys Fluent store value on cell centroid and face centroid, therefore no value on nodes. Here an unelegant but useful method was introduced. That is getting the value from Fluent postprocessing.</p>
@@ -177,11 +180,16 @@ DEFINE_ADJUST(N_UDMI_get_value,d)
     end_f_loop(f,tf)
 }
 </code></pre>
-<h2 id="gradient-related-notes">Gradient Related Notes</h2>
-<ol>
-<li>Fluent 计算过程中默认会将梯度值释放掉以降低内存占用，需要使用命令 <code>solve/set/advanced/retain-temporary-solver-mem</code> 来保存梯度值。</li>
-<li>梯度值是在迭代过程中求解的，因此在迭代开始之前，无法获得梯度值。如 DEFINE_ADJUST 宏在迭代开始之前调用了梯度，Fluent 会报错。可以使用 <code>if(NULL!=T_STORAGE_R_NV(fluid_thread, SV_T_G))</code> 来判断是否已经建立了梯度值。</li>
-</ol>
+<h2 id="get-gradient-value">Get Gradient Value</h2>
+<p>Fluent 计算过程中默认会将梯度值释放掉以降低内存占用，因此通常无法直接访问。但以下几种情况除外：</p>
+<ul>
+<li>压力、三个速度分量和 UDS 的梯度默认保存，可以直接获取</li>
+<li>DEFINE_VECTOR_EXCHANGE_PROPERTY 中调用 C_VOF_G</li>
+<li>使用 DEFINE_SOURCE 到对应方程时，可以调用对应变量梯度。如 energy 源项中调用 C_T_G</li>
+</ul>
+<p><strong>The official way to use gradient macros</strong></p>
+<p>使用命令 <code>solve/set/advanced/retain-temporary-solver-mem</code> 使 Fluent 保留梯度值</p>
+<p>梯度值是在迭代过程中求解的，因此在迭代开始之前，无法获得梯度值。如 DEFINE_ADJUST 宏在迭代开始之前调用了梯度，Fluent 会报错。可以使用 <code>if(NULL!=T_STORAGE_R_NV(fluid_thread, SV_T_G))</code> 来判断是否已经建立了梯度值。</p>
 <pre><code class="language-c">DEFINE_ADJUST(show_gradient, domain)
 {
     face_t f;
@@ -208,9 +216,58 @@ DEFINE_ADJUST(N_UDMI_get_value,d)
         Message(&quot;c=%d, Temperature X gradient is %g\n&quot;, c0, T_gradient[0]);     
     }
     end_f_loop(f, wall_thread)
+}
 
 ————————————————
 转载自：https://blog.csdn.net/SuperUDF/article/details/128140287
+</code></pre>
+<p><strong>The unofficial way to use gradient macros</strong></p>
+<p>There are undocumented macros that allow you to allocate memory and (re-)calculate gradient and reconstruction gradient macros on the fly. These are:</p>
+<ul>
+<li><code>Alloc_Storage_Vars(domain, SV_*_RG, SV_*_G, SV_NULL)</code></li>
+<li><code>Scalar_Reconstruction(domain, SV_*, -1, SV_*_RG, NULL)</code></li>
+<li><code>Scalar_Derivatives(domain, SV_*, -1, SV_*_G, SV_*_RG, NULL)</code></li>
+<li><code>Free_Storage_Vars(domain, SV_*_RG, SV_*_G, SV_NULL)</code></li>
+</ul>
+<p>Example 1:</p>
+<pre><code class="language-c">DEFINE_ADJUST(allocate_vof, d) 
+{
+    #if !RP_HOST 
+    Domain *sd1, *sd2; 
+    sd1 = DOMAIN_SUB_DOMAIN(d, 0); 
+    sd2 = DOMAIN_SUB_DOMAIN(d, 1); 
+    Alloc_Storage_Vars(sd1, SV_VOF_RG, SV_VOF_R, SV_NULL); 
+    Scalar_Reconstruction(sd1, SV_VOF, -1, SV_VOF_RG, NULL); 
+    Scalar_Derivatives(sd1, SV_VOF, -1, SV_VOF_G, SV_VOF_RG, Vof_Deriv_Accumulate);     Alloc_Storage_Vars(sd2, SV_VOF_RG, SV_VOF_R, SV_NULL); 
+    Scalar_Reconstruction(sd2, SV_VOF, -1, SV_VOF_RG, NULL); 
+    Scalar_Derivatives(sd2, SV_VOF, -1, SV_VOF_G, SV_VOF_RG, Vof_Deriv_Accumulate);     #endif 
+}
+</code></pre>
+<p>Example 2:</p>
+<pre><code class="language-c">DEFINE_ADJUST(Shear_stress_calculation,d)
+{
+    #if !RP_HOST
+    face_t f;
+    ......
+    /* Allocate memory for temperature gradients */ 
+    Alloc_Storage_Vars(d, SV_T_RG, SV_T_G, SV_NULL); 
+    /* Calculate temperature gradients */ 
+    T_derivatives(d); 
+    /* Free memory for reconstruction gradient - this is NOT required */ 
+    Free_Storage_Vars(d, SV_T_RG, SV_NULL);
+
+    begin_f_loop(f,tf)
+    {   
+        ......
+    }  
+    end_f_loop(f,tf)
+
+    /* Free memory for gradient - this is NOT required */ 
+    Free_Storage_Vars(d, SV_T_G, SV_NULL);
+    #endif /* ! RP_HOST */
+}
+
+转载自：https://pdfcoffee.com/2039716-3-pdf-free.html
 </code></pre>
               
             </div>
